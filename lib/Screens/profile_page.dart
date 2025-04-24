@@ -1,10 +1,7 @@
-import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -20,6 +17,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String phone = "";
   String address = "";
   String? profilePicUrl; // Nullable string
+  List<String> rentedCarIds = []; // List to store rented car IDs
+  List<Map<String, dynamic>> rentedCars = []; // List to store car details
 
   @override
   void initState() {
@@ -41,33 +40,27 @@ class _ProfilePageState extends State<ProfilePage> {
         name = userData['name'] ?? "No Name";
         phone = userData['phone'] ?? "No Phone Number";
         address = userData['address'] ?? "No Address";
-
-        // Check if the profilePic field exists before accessing it
-        profilePicUrl =
-            userData.containsKey('profilePic') ? userData['profilePic'] : null;
+        rentedCarIds = List<String>.from(userData['rentedCars'] ?? []);
       });
+
+      fetchRentedCars();
     }
   }
 
-  Future<void> pickProfileImage() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      File imageFile = File(pickedFile.path);
-
-      // Upload to Firebase Storage (Not implemented here)
-      // Example: profilePicUrl = await uploadImageToFirebase(imageFile);
+  Future<void> fetchRentedCars() async {
+    if (rentedCarIds.isNotEmpty) {
+      List<Map<String, dynamic>> cars = [];
+      for (String carId in rentedCarIds) {
+        DocumentSnapshot carDoc =
+            await _firestore.collection('cars').doc(carId).get();
+        if (carDoc.exists) {
+          cars.add(carDoc.data() as Map<String, dynamic>);
+        }
+      }
 
       setState(() {
-        profilePicUrl = pickedFile.path; // Temporary display
+        rentedCars = cars;
       });
-
-      await _firestore.collection('users').doc(user!.uid).update({
-        'profilePic': profilePicUrl,
-      });
-
-      Get.snackbar("Success", "Profile picture updated",
-          backgroundColor: Colors.green, colorText: Colors.white);
     }
   }
 
@@ -112,22 +105,56 @@ class _ProfilePageState extends State<ProfilePage> {
             buildProfileDetail("Name", name),
             buildProfileDetail("Phone Number", phone),
             buildProfileDetail("Address", address),
+
+            const SizedBox(height: 20),
+
+            // Rented Cars
+            rentedCars.isEmpty
+                ? Text("You have not rented any cars yet.")
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Rented Cars",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      for (var car in rentedCars)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: car['image'] != null && car['image'] is List
+                              ? (car['image'] as List).isNotEmpty
+                                  ? Image.network(
+                                      car['image']
+                                          [0], // First image in the array
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : const Icon(Icons.car_repair)
+                              : const Icon(Icons.car_repair),
+                          title: Text(car['name'] ?? 'Unknown Car'),
+                          subtitle: Text(
+                              "\₹${car['price_per_km']?.toStringAsFixed(2)} per km"),
+                        ),
+                    ],
+                  ),
           ],
         ),
       ),
     );
   }
 
+  Future<void> pickProfileImage() async {
+    // Image picker code (not implemented here)
+  }
+
   Widget _defaultProfileImage() {
     return CircleAvatar(
       radius: 60,
       backgroundColor: Colors.grey[300], // Placeholder color
-      child: SvgPicture.asset(
-        'assets/images/profile-picture.svg', // Ensure the SVG exists in assets
-        width: 80,
-        height: 80,
-        fit: BoxFit.contain,
-      ),
+      child: Icon(Icons.person, size: 60, color: Colors.white),
     );
   }
 

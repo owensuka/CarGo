@@ -33,24 +33,29 @@ class _CarsPageState extends State<CarsPage> {
     }
   }
 
+  /// 🚗 **Delete Car from Firestore**
   void deleteCar(String carId) async {
     try {
       await FirebaseFirestore.instance.collection('cars').doc(carId).delete();
-      Get.snackbar("Success", "Car deleted successfully");
+      Get.snackbar("Success", "Car deleted successfully",
+          backgroundColor: Colors.green, colorText: Colors.white);
     } catch (e) {
-      Get.snackbar("Error", "Failed to delete car");
+      Get.snackbar("Error", "Failed to delete car",
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    var brightness = MediaQuery.of(context).platformBrightness;
-    bool isDarkMode = brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text("All Cars", style: GoogleFonts.poppins()),
-        backgroundColor: isDarkMode ? Colors.black : Colors.white,
+        title: Text(
+          "All Cars",
+          style: GoogleFonts.poppins(
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        backgroundColor: Colors.blue,
+        elevation: 0,
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -69,19 +74,26 @@ class _CarsPageState extends State<CarsPage> {
           var cars = snapshot.data!.docs;
 
           return Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             child: GridView.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 childAspectRatio: 0.8,
               ),
               itemCount: cars.length,
               itemBuilder: (context, index) {
                 var car = cars[index];
-                var carData =
-                    car.data() as Map<String, dynamic>?; // Ensure it's a Map
+                var carData = car.data() as Map<String, dynamic>?;
+
+                // ✅ **Safely Extract Image Array**
+                List<String> images = [];
+                if (carData?['image'] is List) {
+                  images = List<String>.from(carData?['image']);
+                } else if (carData?['image'] is String) {
+                  images = [carData?['image']];
+                }
 
                 return GestureDetector(
                   onTap: () {
@@ -91,7 +103,8 @@ class _CarsPageState extends State<CarsPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    elevation: 3,
+                    elevation: 2,
+                    color: Colors.white.withOpacity(1),
                     child: Stack(
                       children: [
                         Column(
@@ -101,17 +114,21 @@ class _CarsPageState extends State<CarsPage> {
                               child: ClipRRect(
                                 borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(15)),
-                                child: Image.network(
-                                  carData?['image'] ?? '', // Handle null
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.car_repair, size: 50),
-                                ),
+                                child: images.isNotEmpty
+                                    ? Image.network(
+                                        images.first,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const Icon(Icons.car_repair,
+                                                    size: 50),
+                                      )
+                                    : const Icon(Icons.car_repair, size: 50),
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.all(8.0),
+                              padding: const EdgeInsets.all(10),
                               child: Column(
                                 children: [
                                   Text(
@@ -122,9 +139,9 @@ class _CarsPageState extends State<CarsPage> {
                                     textAlign: TextAlign.center,
                                   ),
                                   Text(
-                                    (carData?.containsKey('price_per_km') ??
+                                    (carData?.containsKey('pricePerKm') ??
                                             false)
-                                        ? "\$${carData!['price_per_km']} per km"
+                                        ? "\$${carData!['pricePerKm']} per km"
                                         : "Price not available",
                                     style: GoogleFonts.poppins(
                                         fontSize: 14, color: Colors.grey),
@@ -134,26 +151,35 @@ class _CarsPageState extends State<CarsPage> {
                             ),
                           ],
                         ),
+
+                        // 🗑 **Admin-Only Delete Button**
                         if (isAdmin)
                           Positioned(
                             top: 5,
                             right: 5,
-                            child: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                Get.defaultDialog(
-                                  title: "Delete Car",
-                                  middleText:
-                                      "Are you sure you want to delete this car?",
-                                  textConfirm: "Yes",
-                                  textCancel: "No",
-                                  confirmTextColor: Colors.white,
-                                  onConfirm: () {
-                                    deleteCar(car.id);
-                                    Get.back();
-                                  },
-                                );
-                              },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.delete,
+                                    color: Colors.white, size: 20),
+                                onPressed: () {
+                                  Get.defaultDialog(
+                                    title: "Delete Car",
+                                    middleText:
+                                        "Are you sure you want to delete this car?",
+                                    textConfirm: "Yes",
+                                    textCancel: "No",
+                                    confirmTextColor: Colors.white,
+                                    onConfirm: () {
+                                      deleteCar(car.id);
+                                      Get.back();
+                                    },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                       ],
@@ -165,12 +191,14 @@ class _CarsPageState extends State<CarsPage> {
           );
         },
       ),
+
+      // ➕ **Floating Button for Admin**
       floatingActionButton: isAdmin
           ? FloatingActionButton(
               onPressed: () {
                 Get.to(() => AddCarPage());
               },
-              backgroundColor: Colors.blue,
+              backgroundColor: Colors.orange,
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
